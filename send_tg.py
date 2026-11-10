@@ -97,18 +97,49 @@ lines.append("<i>Сервер запущен, мир сохранён.</i>")
 
 text = "\n".join(lines)
 
-url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+api_base = f"https://api.telegram.org/bot{BOT_TOKEN}"
 proxies = {"http": PROXY_URL, "https": PROXY_URL}
 
+# --- Шаг 1: отправка сообщения ---
 try:
     r = requests.post(
-        url,
+        f"{api_base}/sendMessage",
         json={"chat_id": CHAT_ID, "text": text, "parse_mode": "HTML"},
         proxies=proxies,
         timeout=30,
     )
     r.raise_for_status()
-    print("Telegram OK")
 except requests.RequestException as e:
     print(f"ОШИБКА отправки в Telegram: {e}", file=sys.stderr)
     sys.exit(2)
+
+try:
+    message_id = r.json()["result"]["message_id"]
+except (KeyError, ValueError) as e:
+    # Сообщение ушло (HTTP 200), но структура ответа неожиданная.
+    # Это не повод падать: уведомление доставлено, пин просто не сделаем.
+    print(f"ВНИМАНИЕ: не удалось извлечь message_id из ответа: {e}", file=sys.stderr)
+    print("Telegram OK (not pinned)")
+    sys.exit(0)
+
+# --- Шаг 2: закрепление (не критично) ---
+try:
+    pin = requests.post(
+        f"{api_base}/pinChatMessage",
+        json={
+            "chat_id": CHAT_ID,
+            "message_id": message_id,
+            "disable_notification": True,
+        },
+        proxies=proxies,
+        timeout=30,
+    )
+    pin.raise_for_status()
+    print("Telegram OK (pinned)")
+except requests.RequestException as e:
+    # Сообщение уже доставлено — это главное. Пин мог не сработать по
+    # множеству причин: бот не админ, нет права can_pin_messages,
+    # лимит закреплений, сетевой сбой. Это не повод валить весь скрипт.
+    print(f"ВНИМАНИЕ: сообщение отправлено, но закрепить не удалось: {e}", file=sys.stderr)
+    print("Telegram OK (not pinned)")
+    sys.exit(0)
