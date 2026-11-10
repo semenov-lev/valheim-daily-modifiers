@@ -79,4 +79,4 @@ fi
 
 # --- Запуск: exec заменяет bash на процесс сервера ---
 cd "$SERVER_DIR"
-exec ./start_server_configured.sh "${ARGS[@]}"
+exec ./start_server_configured.sh -preset normal "${ARGS[@]}"
