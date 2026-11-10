@@ -11,6 +11,28 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
+echo "=== Проверка зависимостей ==="
+
+if ! command -v jq &>/dev/null; then
+    echo "ОШИБКА: jq не установлен. apt install jq" >&2
+    exit 1
+fi
+
+if ! python3 -c "import requests" 2>/dev/null; then
+    echo "ОШИБКА: python3-requests не установлен. apt install python3-requests" >&2
+    exit 1
+fi
+
+# PySocks нужен только если в tg.env используется SOCKS-прокси.
+# На этапе деплоя tg.env может ещё не существовать — проверяем мягко.
+if [ -f "$SERVER_DIR/tg.env" ] && grep -qE '^TG_PROXY_URL=socks' "$SERVER_DIR/tg.env"; then
+    if ! python3 -c "import socks" 2>/dev/null; then
+        echo "ОШИБКА: tg.env указывает SOCKS-прокси, но PySocks не установлен." >&2
+        echo "        Установите: sudo apt install python3-socks" >&2
+        exit 1
+    fi
+fi
+
 if [ ! -d "$SERVER_DIR" ]; then
     echo "ОШИБКА: $SERVER_DIR не найден" >&2
     exit 1

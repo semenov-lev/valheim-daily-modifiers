@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Отправка уведомления о новых модификаторах Valheim в Telegram через прокси."""
+"""Отправка уведомления о новых модификаторах Valheim в Telegram через SOCKS5-прокси."""
 import json
 import os
 import sys
@@ -8,20 +8,37 @@ import requests
 
 BOT_TOKEN = os.environ.get("TG_BOT_TOKEN")
 CHAT_ID = os.environ.get("TG_CHAT_ID")
-PROXY_URL = os.environ.get("TG_PROXY_URL", "http://127.0.0.1:8080")
+PROXY_URL = os.environ.get("TG_PROXY_URL", "")
 LAST = "/home/steam/Valheim-Server/last_modifiers.json"
 DESC = "/home/steam/Valheim-Server/modifier_descriptions.json"
 
+# --- Проверка переменных окружения ---
 if not BOT_TOKEN or not CHAT_ID:
     print("ОШИБКА: TG_BOT_TOKEN или TG_CHAT_ID не заданы", file=sys.stderr)
     sys.exit(1)
 
+if not PROXY_URL:
+    print("ОШИБКА: TG_PROXY_URL не задан в tg.env", file=sys.stderr)
+    sys.exit(1)
+
+# SOCKS5-прокси требует PySocks.
+if PROXY_URL.startswith(("socks5://", "socks5h://", "socks4://", "socks4a://")):
+    try:
+        import socks  # noqa: F401  (PySocks)
+    except ImportError:
+        print(
+            "ОШИБКА: для SOCKS-прокси нужен PySocks.\n"
+            "Установите: pip install 'requests[socks]'",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+# --- Проверка файлов ---
 if not os.path.exists(LAST):
     print(
         f"ОШИБКА: {LAST} не найден.\n"
-        "Этот файл создаётся start_valheim.sh при каждом запуске сервера.\n"
-        "Если вы видите это сообщение — сервер ещё ни разу не стартовал "
-        "после деплоя, либо start_valheim.sh упал до записи файла.\n"
+        "Файл создаётся start_valheim.sh при каждом запуске сервера.\n"
+        "Если сервер ещё ни разу не стартовал после деплоя — это ожидаемо.\n"
         "Проверьте: journalctl -u valheim-server.service -n 50",
         file=sys.stderr,
     )
@@ -48,7 +65,6 @@ def describe(modifier: str, value) -> str:
     entry = desc.get(modifier, {}).get(lookup_key)
 
     if entry is None:
-        # Ни значение, ни fallback 'normal' не найдены — не падаем
         raw = value if value is not None else "normal"
         return f"{raw} (описание не найдено)"
 
@@ -63,7 +79,6 @@ lines = [
     f"📦 <b>Ресурсы:</b> {describe('resources', active.get('resources'))}",
     f"👹 <b>Рейды:</b> {describe('raids', active.get('raids'))}",
     f"🌀 <b>Порталы:</b> {describe('portals', active.get('portals'))}",
-
 ]
 
 setkeys = active.get("setkeys") or []
