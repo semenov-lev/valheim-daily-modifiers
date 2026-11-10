@@ -11,18 +11,18 @@
   и `TimeoutStopSec` — без BepInEx-модов и RCON.
 - 📨 **Уведомления в Telegram** с описанием активных модификаторов (на русском,
   по материалам [русской вики](https://ru.valheim.weirdgloop.org/w/Модификаторы_мира)).
-- 🌐 **Обход блокировки Telegram в РФ** через локальный прокси `tgwsapiproxy` +
-  Cloudflare Worker (трафик маскируется под `*.workers.dev`).
+  Отправка через внешний SOCKS5-прокси (`socks5h://`) — DNS резолвится на стороне
+  прокси, что обходит блокировку в РФ.
 
 ## Требования
 
 - Ubuntu 24.04 (тестировалось), пользователь `steam`, сервер Valheim 1.0+.
-- `jq`, `python3`, `python3-requests`.
+- `jq`, `python3`, `python3-requests`, `python3-socks`.
 - `steamcmd` в `/usr/games/steamcmd`.
-- (опционально, для Telegram) `tgwsapiproxy` и развёрнутый Cloudflare Worker.
+- (для Telegram) внешний SOCKS5-прокси за пределами РФ.
 
 ```bash
-sudo apt install jq python3 python3-requests
+sudo apt install jq python3 python3-requests python3-socks
 ```
 
 ## Установка
@@ -54,7 +54,7 @@ sudo systemctl enable --now valheim-server-rotate.timer
 | `modifiers.json` | Пул допустимых значений модификаторов, фиксированный набор `setkeys`, время ротации |
 | `modifier_descriptions.json` | Справочник «код → название и объяснение по-русски» для Telegram |
 | `start_valheim.sh` | Выбирает случайные значения, пишет `last_modifiers.json`, запускает сервер через `exec` |
-| `send_tg.py` | Читает `last_modifiers.json` + `modifier_descriptions.json`, отправляет сообщение через прокси |
+| `send_tg.py` | Читает `last_modifiers.json` + `modifier_descriptions.json`, отправляет сообщение через SOCKS5-прокси |
 | `apply-schedule.sh` | Генерирует `valheim-server-rotate.timer` из шаблона по `restart_time` из JSON |
 | `deploy.sh` | Копирует файлы в `/home/steam/Valheim-Server/`, ставит юниты, вызывает `apply-schedule.sh` |
 | `systemd/valheim-server.service` | Основной сервис: SteamCMD update → обёртка → `ExecStartPost` с уведомлением |
@@ -250,15 +250,18 @@ unset P T
 
 ### Когда отправляется сообщение
 
-Уведомление вызывается из `ExecStartPost=` основного сервиса, то есть
-**после каждого успешного запуска**, включая:
+Уведомление вызывается из `ExecStartPost=` основного сервиса, то есть **после
+каждого запуска**, включая:
 
 - ежедневный рестарт по таймеру (05:00 или catch-up после пропуска);
 - ручной `systemctl restart valheim-server`;
 - перезагрузку сервера (boot).
 
-Если сервер упал сразу после старта — сообщение не уйдёт (проверка
-`systemctl is-active --quiet`).
+Префикс `-` в `ExecStartPost=` означает, что провал `send_tg.py` (нет `tg.env`,
+прокси недоступен, `last_modifiers.json` отсутствует) **не** переведёт юнит в
+состояние `failed` и **не** остановит работающий сервер. Ошибки видны в
+`journalctl -u valheim-server.service` — они не влияют на жизненный цикл
+сервиса, но полезны для диагностики.
 
 ## Бэкапы
 
@@ -315,7 +318,9 @@ sudo systemctl restart valheim-server.service
 
 `deploy.sh` идемпотентен: перезаписывает файлы, обновляет юниты, вызывает
 `apply-schedule.sh` (пересобирает таймер из JSON), но **не трогает** `tg.env`
-и `last_modifiers.json`.
+и `last_modifiers.json`. Юнит `valheim-server.service` не перезапускается
+автоматически — это осознанно: `restart` делается руками, чтобы контролировать
+момент перезапуска.
 
 ## Структура репозитория
 
