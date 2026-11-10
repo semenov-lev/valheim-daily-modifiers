@@ -18,7 +18,7 @@ fi
 
 echo "=== Деплой в $SERVER_DIR ==="
 
-install -o "$STEAM_USER" -g "$STEAM_GROUP" -m 644 "$REPO_DIR/modifiers.json"  "$SERVER_DIR/modifiers.json"
+install -o "$STEAM_USER" -g "$STEAM_GROUP" -m 644 "$REPO_DIR/modifiers.json"   "$SERVER_DIR/modifiers.json"
 install -o "$STEAM_USER" -g "$STEAM_GROUP" -m 755 "$REPO_DIR/start_valheim.sh" "$SERVER_DIR/start_valheim.sh"
 install -o "$STEAM_USER" -g "$STEAM_GROUP" -m 755 "$REPO_DIR/send_tg.py"       "$SERVER_DIR/send_tg.py"
 
@@ -27,14 +27,24 @@ if [ ! -f "$SERVER_DIR/tg.env" ]; then
     echo "ВНИМАНИЕ: создан $SERVER_DIR/tg.env — заполните токен и chat_id"
 fi
 
+echo "=== Удаление старых юнитов (если есть) ==="
+for old in valheim.service valheim-rotate.service valheim-rotate.timer; do
+    if [ -f "/etc/systemd/system/$old" ]; then
+        echo "  удаляю /etc/systemd/system/$old"
+        systemctl disable --now "$old" 2>/dev/null || true
+        rm -f "/etc/systemd/system/$old"
+    fi
+done
+systemctl daemon-reload
+
 echo "=== Установка systemd-юнитов ==="
-install -m 644 "$REPO_DIR/systemd/valheim.service"        /etc/systemd/system/
-install -m 644 "$REPO_DIR/systemd/valheim-rotate.service" /etc/systemd/system/
-install -m 644 "$REPO_DIR/systemd/valheim-rotate.timer"   /etc/systemd/system/
+install -m 644 "$REPO_DIR/systemd/valheim-server.service"        /etc/systemd/system/
+install -m 644 "$REPO_DIR/systemd/valheim-server-rotate.service" /etc/systemd/system/
+install -m 644 "$REPO_DIR/systemd/valheim-server-rotate.timer"   /etc/systemd/system/
 systemctl daemon-reload
 
 echo
 echo "=== Готово ==="
-echo "Проверьте диффы перед перезапуском: systemctl cat valheim.service"
-echo "Активировать таймер:    systemctl enable --now valheim-rotate.timer"
-echo "Применить модификаторы: systemctl restart valheim"
+echo "Проверить юнит:          systemctl cat valheim-server.service"
+echo "Активировать таймер:     systemctl enable --now valheim-server-rotate.timer"
+echo "Применить модификаторы:  systemctl restart valheim-server.service"

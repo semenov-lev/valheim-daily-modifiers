@@ -1,0 +1,13 @@
+[Unit]
+Description=Rotate Valheim world modifiers and notify via Telegram
+After=valheim-server.service network-online.target
+
+[Service]
+Type=oneshot
+User=root
+EnvironmentFile=/home/steam/Valheim-Server/tg.env
+ExecStart=/bin/bash -c '\
+    systemctl restart valheim-server.service && \
+    sleep 5 && \
+    systemctl is-active --quiet valheim-server.service && \
+    /usr/bin/python3 /home/steam/Valheim-Server/send_tg.py'
