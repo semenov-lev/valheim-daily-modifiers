@@ -23,7 +23,7 @@ ExecStartPost=-/bin/bash -c 'sleep 5 && /usr/bin/python3 /home/steam/Valheim-Ser
 KillSignal=SIGINT
 TimeoutStopSec=120
 
-Restart=on-failure
+Restart=on-abnormal
 RestartSec=15
 
 [Install]

@@ -26,7 +26,9 @@ PORTALS=$(pick portals)
 ARGS=()
 add_mod() {
     local key="$1" val="$2"
-    [ -n "$val" ] && ARGS+=(-modifier "$key" "$val")
+    if [ -n "$val" ]; then
+        ARGS+=(-modifier "$key" "$val")
+    fi
 }
 
 add_mod combat       "$COMBAT"
@@ -38,7 +40,9 @@ add_mod portals      "$PORTALS"
 # setkeys (фиксированный массив из JSON)
 SETKEYS_ARRAY=$(jq -c '.setkeys // []' "$JSON")
 while IFS= read -r key; do
-    [ -n "$key" ] && ARGS+=(-setkey "$key")
+    if [ -n "$key" ]; then
+        ARGS+=(-setkey "$key")
+    fi
 done < <(jq -r '.setkeys[]?' "$JSON")
 
 # --- Атомарная запись last_modifiers.json для send_tg.py ---
