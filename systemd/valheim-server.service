@@ -17,7 +17,7 @@ TimeoutStartSec=900
 ExecStart=/home/steam/Valheim-Server/start_valheim.sh
 
 # Уведомление после каждого успешного старта (включая restart от rotate-сервиса)
-ExecStartPost=/bin/bash -c 'sleep 5 && systemctl is-active --quiet valheim-server.service && /usr/bin/python3 /home/steam/Valheim-Server/send_tg.py'
+ExecStartPost=-/bin/bash -c 'sleep 5 && /usr/bin/python3 /home/steam/Valheim-Server/send_tg.py'
 
 # КРИТИЧЕСКИ ВАЖНО: SIGINT → сохранение мира при остановке
 KillSignal=SIGINT
