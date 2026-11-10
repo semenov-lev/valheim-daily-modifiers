@@ -1,0 +1,10 @@
+{
+  "pool": {
+    "combat":       ["veryeasy", "easy", "", "hard", "veryhard"],
+    "deathpenalty": ["casual", "veryeasy", "easy", "", "hard", "hardcore"],
+    "resources":    ["muchless", "less", "", "more", "muchmore", "most"],
+    "raids":        ["none", "muchless", "less", "", "more", "muchmore"],
+    "portals":      ["casual", "", "hard", "veryhard"]
+  },
+  "setkeys": ["nomap", "passivemobs"]
+}
