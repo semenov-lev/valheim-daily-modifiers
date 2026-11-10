@@ -7,39 +7,64 @@ import sys
 import requests
 
 BOT_TOKEN = os.environ.get("TG_BOT_TOKEN")
-CHAT_ID   = os.environ.get("TG_CHAT_ID")
+CHAT_ID = os.environ.get("TG_CHAT_ID")
 PROXY_URL = os.environ.get("TG_PROXY_URL", "http://127.0.0.1:8080")
-LAST      = "/home/steam/Valheim-Server/last_modifiers.json"
+LAST = "/home/steam/Valheim-Server/last_modifiers.json"
+DESC = "/home/steam/Valheim-Server/modifier_descriptions.json"
 
 if not BOT_TOKEN or not CHAT_ID:
     print("ОШИБКА: TG_BOT_TOKEN или TG_CHAT_ID не заданы", file=sys.stderr)
     sys.exit(1)
 
-if not os.path.exists(LAST):
-    print(f"ОШИБКА: {LAST} не найден", file=sys.stderr)
-    sys.exit(1)
-
 with open(LAST, encoding="utf-8") as f:
-    m = json.load(f)
+    active = json.load(f)
+
+with open(DESC, encoding="utf-8") as f:
+    desc = json.load(f)
 
 
-def fmt(value, default="normal"):
-    return value if value else default
+def describe(modifier: str, value) -> str:
+    """Возвращает строку для Telegram для одного модификатора.
+
+    Если value is None (модификатор не передан), используется запись 'normal'
+    из справочника — это позволяет описать стандартные игровые значения.
+    """
+    lookup_key = "normal" if value is None else value
+    entry = desc.get(modifier, {}).get(lookup_key)
+
+    if entry is None:
+        # Ни значение, ни fallback 'normal' не найдены — не падаем
+        raw = value if value is not None else "normal"
+        return f"{raw} (описание не найдено)"
+
+    return f"{entry['label']} — {entry['description']}"
 
 
-setkeys = m.get("setkeys") or []
-setkeys_line = ", ".join(setkeys) if setkeys else "нет"
+lines = [
+    "🎮 <b>Valheim: новые модификаторы мира</b>",
+    "",
+    f"⚔️ <b>Бой:</b> {describe('combat', active.get('combat'))}",
+    f"💀 <b>Штраф за смерть:</b> {describe('deathpenalty', active.get('deathpenalty'))}",
+    f"📦 <b>Ресурсы:</b> {describe('resources', active.get('resources'))}",
+    f"👹 <b>Рейды:</b> {describe('raids', active.get('raids'))}",
+    f"🌀 <b>Порталы:</b> {describe('portals', active.get('portals'))}",
+]
 
-text = (
-    "🎮 <b>Valheim: новые модификаторы мира</b>\n\n"
-    f"⚔️ combat: <b>{fmt(m.get('combat'))}</b>\n"
-    f"💀 deathpenalty: <b>{fmt(m.get('deathpenalty'))}</b>\n"
-    f"📦 resources: <b>{fmt(m.get('resources'))}</b>\n"
-    f"👹 raids: <b>{fmt(m.get('raids'))}</b>\n"
-    f"🌀 portals: <b>{fmt(m.get('portals'))}</b>\n"
-    f"🔧 setkeys: <b>{setkeys_line}</b>\n\n"
-    "<i>Сервер перезапущен, мир сохранён.</i>"
-)
+setkeys = active.get("setkeys") or []
+if setkeys:
+    lines.append("")
+    lines.append("🔧 <b>Дополнительные флаги:</b>")
+    for key in setkeys:
+        entry = desc.get("setkeys", {}).get(key)
+        if entry:
+            lines.append(f"• <b>{entry['label']}</b> — {entry['description']}")
+        else:
+            lines.append(f"• {key}")
+
+lines.append("")
+lines.append("<i>Сервер перезапущен, мир сохранён.</i>")
+
+text = "\n".join(lines)
 
 url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
 proxies = {"http": PROXY_URL, "https": PROXY_URL}

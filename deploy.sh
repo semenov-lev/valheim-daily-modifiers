@@ -19,6 +19,7 @@ fi
 echo "=== Деплой в $SERVER_DIR ==="
 
 install -o "$STEAM_USER" -g "$STEAM_GROUP" -m 644 "$REPO_DIR/modifiers.json"   "$SERVER_DIR/modifiers.json"
+install -o "$STEAM_USER" -g "$STEAM_GROUP" -m 644 "$REPO_DIR/modifier_descriptions.json" "$SERVER_DIR/modifier_descriptions.json"
 install -o "$STEAM_USER" -g "$STEAM_GROUP" -m 755 "$REPO_DIR/start_valheim.sh" "$SERVER_DIR/start_valheim.sh"
 install -o "$STEAM_USER" -g "$STEAM_GROUP" -m 755 "$REPO_DIR/send_tg.py"       "$SERVER_DIR/send_tg.py"
 
