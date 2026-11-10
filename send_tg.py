@@ -16,6 +16,21 @@ if not BOT_TOKEN or not CHAT_ID:
     print("ОШИБКА: TG_BOT_TOKEN или TG_CHAT_ID не заданы", file=sys.stderr)
     sys.exit(1)
 
+if not os.path.exists(LAST):
+    print(
+        f"ОШИБКА: {LAST} не найден.\n"
+        "Этот файл создаётся start_valheim.sh при каждом запуске сервера.\n"
+        "Если вы видите это сообщение — сервер ещё ни разу не стартовал "
+        "после деплоя, либо start_valheim.sh упал до записи файла.\n"
+        "Проверьте: journalctl -u valheim-server.service -n 50",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+if not os.path.exists(DESC):
+    print(f"ОШИБКА: {DESC} не найден. Запустите deploy.sh повторно.", file=sys.stderr)
+    sys.exit(1)
+
 with open(LAST, encoding="utf-8") as f:
     active = json.load(f)
 

@@ -18,10 +18,10 @@ fi
 
 echo "=== Деплой в $SERVER_DIR ==="
 
-install -o "$STEAM_USER" -g "$STEAM_GROUP" -m 644 "$REPO_DIR/modifiers.json"   "$SERVER_DIR/modifiers.json"
-install -o "$STEAM_USER" -g "$STEAM_GROUP" -m 644 "$REPO_DIR/modifier_descriptions.json" "$SERVER_DIR/modifier_descriptions.json"
-install -o "$STEAM_USER" -g "$STEAM_GROUP" -m 755 "$REPO_DIR/start_valheim.sh" "$SERVER_DIR/start_valheim.sh"
-install -o "$STEAM_USER" -g "$STEAM_GROUP" -m 755 "$REPO_DIR/send_tg.py"       "$SERVER_DIR/send_tg.py"
+install -o "$STEAM_USER" -g "$STEAM_GROUP" -m 644 "$REPO_DIR/modifiers.json"              "$SERVER_DIR/modifiers.json"
+install -o "$STEAM_USER" -g "$STEAM_GROUP" -m 644 "$REPO_DIR/modifier_descriptions.json"  "$SERVER_DIR/modifier_descriptions.json"
+install -o "$STEAM_USER" -g "$STEAM_GROUP" -m 755 "$REPO_DIR/start_valheim.sh"            "$SERVER_DIR/start_valheim.sh"
+install -o "$STEAM_USER" -g "$STEAM_GROUP" -m 755 "$REPO_DIR/send_tg.py"                  "$SERVER_DIR/send_tg.py"
 
 if [ ! -f "$SERVER_DIR/tg.env" ]; then
     install -o "$STEAM_USER" -g "$STEAM_GROUP" -m 600 "$REPO_DIR/tg.env.example" "$SERVER_DIR/tg.env"
@@ -38,11 +38,12 @@ for old in valheim.service valheim-rotate.service valheim-rotate.timer; do
 done
 systemctl daemon-reload
 
-echo "=== Установка systemd-юнитов ==="
+echo "=== Установка systemd-сервисов ==="
 install -m 644 "$REPO_DIR/systemd/valheim-server.service"        /etc/systemd/system/
 install -m 644 "$REPO_DIR/systemd/valheim-server-rotate.service" /etc/systemd/system/
-install -m 644 "$REPO_DIR/systemd/valheim-server-rotate.timer"   /etc/systemd/system/
-systemctl daemon-reload
+
+echo "=== Генерация таймера из шаблона ==="
+"$REPO_DIR/apply-schedule.sh"
 
 echo
 echo "=== Готово ==="

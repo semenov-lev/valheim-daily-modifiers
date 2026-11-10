@@ -2,7 +2,7 @@
 Description=Daily Valheim modifier rotation
 
 [Timer]
-OnCalendar=*-*-* 05:00:00
+OnCalendar=*-*-* __RESTART_TIME__:00
 Persistent=true
 RandomizedDelaySec=30
 

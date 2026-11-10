@@ -1,10 +1,48 @@
 {
-  "pool": {
-    "combat":       ["veryeasy", "easy", "", "hard", "veryhard"],
-    "deathpenalty": ["casual", "veryeasy", "easy", "", "hard", "hardcore"],
-    "resources":    ["muchless", "less", "", "more", "muchmore", "most"],
-    "raids":        ["none", "muchless", "less", "", "more", "muchmore"],
-    "portals":      ["casual", "", "hard", "veryhard"]
+  "schedule": {
+    "restart_time": "05:00"
   },
-  "setkeys": ["nomap", "passivemobs"]
+  "pool": {
+    "combat": [
+      "veryeasy",
+      "easy",
+      "",
+      "hard",
+      "veryhard"
+    ],
+    "deathpenalty": [
+      "casual",
+      "veryeasy",
+      "easy",
+      "",
+      "hard",
+      "hardcore"
+    ],
+    "resources": [
+      "muchless",
+      "less",
+      "",
+      "more",
+      "muchmore",
+      "most"
+    ],
+    "raids": [
+      "none",
+      "muchless",
+      "less",
+      "",
+      "more",
+      "muchmore"
+    ],
+    "portals": [
+      "casual",
+      "",
+      "hard",
+      "veryhard"
+    ]
+  },
+  "setkeys": [
+    "nomap",
+    "passivemobs"
+  ]
 }
