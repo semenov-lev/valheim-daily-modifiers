@@ -48,6 +48,7 @@ lines = [
     f"📦 <b>Ресурсы:</b> {describe('resources', active.get('resources'))}",
     f"👹 <b>Рейды:</b> {describe('raids', active.get('raids'))}",
     f"🌀 <b>Порталы:</b> {describe('portals', active.get('portals'))}",
+
 ]
 
 setkeys = active.get("setkeys") or []
@@ -62,7 +63,7 @@ if setkeys:
             lines.append(f"• {key}")
 
 lines.append("")
-lines.append("<i>Сервер перезапущен, мир сохранён.</i>")
+lines.append("<i>Сервер запущен, мир сохранён.</i>")
 
 text = "\n".join(lines)
 

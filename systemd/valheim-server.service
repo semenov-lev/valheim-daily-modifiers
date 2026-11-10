@@ -7,6 +7,7 @@ After=network-online.target
 User=steam
 Group=steam
 WorkingDirectory=/home/steam/Valheim-Server
+EnvironmentFile=/home/steam/Valheim-Server/tg.env
 
 # SteamCMD обновляет сервер перед каждым запуском
 ExecStartPre=/usr/games/steamcmd +force_install_dir '/home/steam/Valheim-Server' +login anonymous +app_update 896660 validate +quit
@@ -14,6 +15,9 @@ TimeoutStartSec=900
 
 # Обёртка: случайные модификаторы + exec сервера
 ExecStart=/home/steam/Valheim-Server/start_valheim.sh
+
+# Уведомление после каждого успешного старта (включая restart от rotate-сервиса)
+ExecStartPost=/bin/bash -c 'sleep 5 && systemctl is-active --quiet valheim-server.service && /usr/bin/python3 /home/steam/Valheim-Server/send_tg.py'
 
 # КРИТИЧЕСКИ ВАЖНО: SIGINT → сохранение мира при остановке
 KillSignal=SIGINT
