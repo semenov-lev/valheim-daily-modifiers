@@ -3,8 +3,14 @@
 Набор скриптов и systemd-юнитов для выделенного сервера Valheim (Ubuntu 24.04):
 
 - 🎲 **Ежедневная случайная ротация world modifiers** — комбинация `combat`,
-  `deathpenalty`, `resources`, `raids`, `portals` выбирается из пула заново
-  при каждом перезапуске.
+  `deathpenalty`, `resources`, `raids`, `portals` выбирается заново при каждом
+  перезапуске с учётом **весов** и **баланса сложности** (см.
+  [`modifier_picker.py`](#как-работает-выбор-модификаторов)).
+- ⚖️ **Сбалансированность** — суммарный difficulty score комбинации держится в
+  заданном диапазоне (`difficulty_range`), поэтому «лёгкие» и «сложные» дни
+  перемежаются, а не выпадают подряд.
+- 📊 **`--stats N`** — симуляция распределения выбора, чтобы настраивать веса
+  осознанно, без реальных перезапусков.
 - 🔧 **Фиксированный набор `setkeys`** (`nomap`, `passivemobs` и т.п.), который
   задаётся в одном месте и применяется ко всем запускам.
 - 💾 **Корректное сохранение мира при перезапуске** через `KillSignal=SIGINT`
@@ -12,7 +18,7 @@
 - 📨 **Уведомления в Telegram** с описанием активных модификаторов (на русском,
   по материалам [русской вики](https://ru.valheim.weirdgloop.org/w/Модификаторы_мира)).
   Отправка через внешний SOCKS5-прокси (`socks5h://`) — DNS резолвится на стороне
-  прокси, что обходит блокировку в РФ.
+  прокси, что обходит блокировку в РФ. Сообщение закрепляется в чате.
 
 ## Требования
 
@@ -51,12 +57,13 @@ sudo systemctl enable --now valheim-server-rotate.timer
 
 | Файл | Роль |
 | :--- | :--- |
-| `modifiers.json` | Пул допустимых значений модификаторов, фиксированный набор `setkeys`, время ротации |
+| `modifiers.json` | Пул значений с **весами**, блок `balance` (difficulty scores, диапазон), фиксированный набор `setkeys`, время ротации |
 | `modifier_descriptions.json` | Справочник «код → название и объяснение по-русски» для Telegram |
-| `start_valheim.sh` | Выбирает случайные значения, пишет `last_modifiers.json`, запускает сервер через `exec` |
-| `send_tg.py` | Читает `last_modifiers.json` + `modifier_descriptions.json`, отправляет сообщение через SOCKS5-прокси |
+| `modifier_picker.py` | Взвешенный выбор + проверка difficulty score; режим `--stats` и функция `validate_config` |
+| `start_valheim.sh` | Вызывает `modifier_picker.py`, пишет `last_modifiers.json`, запускает сервер через `exec` |
+| `send_tg.py` | Читает `last_modifiers.json` + `modifier_descriptions.json`, отправляет сообщение и закрепляет его |
 | `apply-schedule.sh` | Генерирует `valheim-server-rotate.timer` из шаблона по `restart_time` из JSON |
-| `deploy.sh` | Копирует файлы в `/home/steam/Valheim-Server/`, ставит юниты, вызывает `apply-schedule.sh` |
+| `deploy.sh` | Валидирует конфиг, копирует файлы в `/home/steam/Valheim-Server/`, ставит юниты, вызывает `apply-schedule.sh` |
 | `systemd/valheim-server.service` | Основной сервис: SteamCMD update → обёртка → `ExecStartPost` с уведомлением |
 | `systemd/valheim-server-rotate.service` | Разовый `systemctl restart` основного сервиса |
 | `systemd/valheim-server-rotate.timer.template` | Шаблон таймера с плейсхолдером `__RESTART_TIME__` |
@@ -68,22 +75,69 @@ Runtime-файлы, которые **не коммитятся** и создаю
 
 ## Настройка модификаторов
 
-Редактируйте `modifiers.json`. Пустая строка `""` в пуле означает **«не передавать
-аргумент»** — это состояние «Normal» по умолчанию. В игре у ползунков четыре
-метки, но в командной строке для «Normal» значения нет: `-modifier` принимает
-только отклонения от стандарта.
+Редактируйте `modifiers.json`. Каждому значению задан **вес** — чем больше
+число, тем чаще оно выпадает. `normal` — это явный ключ в пуле; при передаче в
+сервер `start_valheim.sh` пропускает его, потому что «Normal» в Valheim — это
+отсутствие аргумента `-modifier`, а не отдельное значение.
+
+### Веса и difficulty score
+
+Пул каждого модификатора — словарь `{ значение: вес }`. Вероятность выбрать
+значение — это его вес, делённый на сумму весов **этого** модификатора. Веса
+независимы между модификаторами и не обязаны в сумме давать 100.
+
+Помимо весов у каждого значения есть **difficulty score** в блоке
+`balance.scores` — условная оценка «насколько это меняет сложность». Score
+комбинации — сумма score всех выбранных значений. `modifier_picker.py` делает
+взвешенный выбор, и если суммарный score попал в `balance.difficulty_range`
+(например `[-1, 1]`), комбинация принимается; иначе выбор повторяется, до
+`max_attempts` попыток.
+
+Так «интересные», но редкие по весам значения не выпадают подряд: тяжёлый день
+(`veryhard` бой + `hardcore` смерть) почти наверняка выйдет за верхнюю границу,
+и пикер перебросает его в более сбалансированную комбинацию.
+
+Если после `max_attempts` попыток ничего не попало в диапазон, срабатывает
+**fallback** — все модификаторы становятся `normal` (score `0.0`). Именно
+поэтому `normal` обязан быть в каждом пуле; `validate_config` проверяет это
+(категория `no_normal_for_fallback`).
+
+### Как работает выбор модификаторов
+
+Логика вынесена в `modifier_picker.py` и не зависит от systemd:
+
+1. **`weighted_pick(weights)`** — взвешенный выбор одного значения из пула.
+2. **`difficulty(combo, scores)`** — сумма score по всем модификаторам
+   (значения без явного score считаются нейтральными, `0.0`).
+3. **`pick_balanced(...)`** — до `max_attempts` раз собирает комбинацию и
+   возвращает первую, чей score попал в `[lo, hi]`; иначе fallback на `normal`.
+
+При запуске `start_valheim.sh` вызывает пикер, получает JSON-комбинацию,
+атомарно пишет её в `last_modifiers.json` (с `timestamp`, `_difficulty_score` и
+`_attempts`), собирает аргументы `-modifier <имя> <значение>` для всех
+значений, **кроме** `normal`, добавляет `-setkey` для каждого элемента
+`setkeys[]` и `exec`-ом запускает `start_server_configured.sh`.
 
 ```json
 {
-  "schedule": {
-    "restart_time": "05:00"
-  },
+  "schedule": { "restart_time": "05:00" },
   "pool": {
-    "combat":       ["veryeasy", "easy", "hard", "veryhard", ""],
-    "deathpenalty": ["casual", "veryeasy", "easy", "hard", "hardcore", ""],
-    "resources":    ["muchless", "less", "more", "muchmore", "most", ""],
-    "raids":        ["none", "muchless", "less", "more", "muchmore", ""],
-    "portals":      ["casual", "hard", "veryhard", ""]
+    "combat":       { "easy": 15, "normal": 20, "hard": 30, "veryhard": 15 },
+    "deathpenalty": { "casual": 10, "veryeasy": 15, "easy": 20, "normal": 30, "hard": 15 },
+    "resources":    { "muchless": 10, "less": 20, "normal": 40, "more": 20, "muchmore": 10 },
+    "raids":        { "none": 5, "muchless": 10, "normal": 30, "more": 20, "muchmore": 10 },
+    "portals":      { "casual": 5, "normal": 30, "hard": 15, "veryhard": 5 }
+  },
+  "balance": {
+    "difficulty_range": [-1, 1],
+    "max_attempts": 100,
+    "scores": {
+      "combat":       { "easy": -2, "normal": 0, "hard": 0.5, "veryhard": 2 },
+      "deathpenalty": { "casual": -3, "veryeasy": -2, "easy": -0.5, "normal": 0, "hard": 2, "hardcore": 3 },
+      "resources":    { "muchmore": -2, "more": -1, "normal": 0, "less": 0.5, "muchless": 1 },
+      "raids":        { "none": -2, "muchless": -1, "normal": 0, "more": 0.5, "muchmore": 1.5 },
+      "portals":      { "casual": -2, "normal": 0, "hard": 0.5, "veryhard": 2 }
+    }
   },
   "setkeys": []
 }
@@ -91,16 +145,17 @@ Runtime-файлы, которые **не коммитятся** и создаю
 
 ### Допустимые значения
 
-| Модификатор | Валидные значения | «Normal» через |
-| :--- | :--- | :--- |
-| `combat` | `veryeasy`, `easy`, `hard`, `veryhard` | `""` |
-| `deathpenalty` | `casual`, `veryeasy`, `easy`, `hard`, `hardcore` | `""` |
-| `resources` | `muchless`, `less`, `more`, `muchmore`, `most` | `""` |
-| `raids` | `none`, `muchless`, `less`, `more`, `muchmore` | `""` |
-| `portals` | `casual`, `hard`, `veryhard` | `""` |
+| Модификатор | Валидные значения |
+| :--- | :--- |
+| `combat` | `veryeasy`, `easy`, `normal`, `hard`, `veryhard` |
+| `deathpenalty` | `casual`, `veryeasy`, `easy`, `normal`, `hard`, `hardcore` |
+| `resources` | `muchless`, `less`, `normal`, `more`, `muchmore`, `most` |
+| `raids` | `none`, `muchless`, `less`, `normal`, `more`, `muchmore` |
+| `portals` | `casual`, `normal`, `hard`, `veryhard` |
 
-Значения пишутся **слитно и в нижнем регистре** (`veryhard`, `muchmore`), иначе
-сервер молча проигнорирует аргумент.
+«Normal» — это явное значение `normal` в пуле; в аргументах сервера оно **не**
+передаётся. Значения пишутся **слитно и в нижнем регистре** (`veryhard`,
+`muchmore`), иначе сервер молча проигнорирует аргумент.
 
 ### Setkeys (фиксированный набор)
 
@@ -130,6 +185,56 @@ sudo /home/steam/valheim-config/apply-schedule.sh
 
 Скрипт проверит формат, сгенерирует новый `.timer`, сделает `daemon-reload` и
 перезапустит таймер. `systemctl list-timers` покажет новую дату `NEXT`.
+
+### Настройка весов: `--stats`
+
+Чтобы подобрать веса осознанно, не перезапуская сервер, используйте симуляцию:
+
+```bash
+python3 modifier_picker.py modifiers.json --stats 20000
+```
+
+Скрипт прогоняет выбор `N` раз и печатает по каждому модификатору:
+
+- **picked%** — как часто значение выбиралось взвешенным пикером (на любой
+  попытке) — примерно пропорционально заданным весам;
+- **accepted%** — как часто значение попадало в итоговую (принятую) комбинацию;
+- **rejected%** — как часто выбор с этим значением отбраковывался
+  `difficulty_range`.
+
+В конце — строка **`Fallback: …%`** и гистограмма распределения difficulty
+score. Хороший конфиг: `fallback_pct ≈ 0.00%` и симметричное распределение
+вокруг центра диапазона. Большой `fallback_pct` или перекос — признак того, что
+`difficulty_range` слишком узок относительно разброса score: расширьте диапазон
+или подправьте `scores`.
+
+`--stats` работает автономно (не трогает сервер, не пишет файлов) и безопасен
+на машине разработчика.
+
+### Валидация конфига
+
+`validate_config(config)` возвращает словарь `{категория: [детали]}`; пустой
+словарь = конфиг валиден. Функция вызывается **автоматически внутри
+`deploy.sh`** — при проблемах деплой прерывается с ненулевым кодом. Проверить
+вручную:
+
+```bash
+python3 -c "import json; from modifier_picker import validate_config as v; print(v(json.load(open('modifiers.json'))))"
+```
+
+Категории проблем:
+
+| Категория | Что значит |
+| :--- | :--- |
+| `structure` | Нет обязательных полей (`pool`, `difficulty_range`) или диапазон некорректен |
+| `empty_pool` | У модификатора пустой пул |
+| `zero_total_weight` | Сумма весов модификатора `<= 0` |
+| `zero_weight_values` | Значения с весом `<= 0` — никогда не выберутся |
+| `missing_scores` | У значения пула нет score в `balance.scores` |
+| `unreachable` | Значение не помещается в `difficulty_range` ни в одной комбинации |
+| `no_normal_for_fallback` | В пуле нет `normal` — fallback не сработает |
+
+Добавляя новое значение, всегда прогоняйте `validate_config` + `--stats`.
 
 ## Требование к `start_server_configured.sh`
 
@@ -325,12 +430,13 @@ sudo systemctl restart valheim-server.service
 ## Структура репозитория
 
 ```
-valheim-server-ops/
+valheim-daily-modifiers/
 ├── .gitignore
 ├── LICENSE
 ├── README.md
 ├── modifiers.json
 ├── modifier_descriptions.json
+├── modifier_picker.py
 ├── start_valheim.sh
 ├── send_tg.py
 ├── apply-schedule.sh
