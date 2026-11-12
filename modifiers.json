@@ -1,48 +1,53 @@
 {
-  "schedule": {
-    "restart_time": "05:00"
-  },
+  "schedule": { "restart_time": "05:00" },
+
   "pool": {
-    "combat": [
-      "veryeasy",
-      "easy",
-      "",
-      "hard",
-      "veryhard"
-    ],
-    "deathpenalty": [
-      "casual",
-      "veryeasy",
-      "easy",
-      "",
-      "hard",
-      "hardcore"
-    ],
-    "resources": [
-      "muchless",
-      "less",
-      "",
-      "more",
-      "muchmore",
-      "most"
-    ],
-    "raids": [
-      "none",
-      "muchless",
-      "less",
-      "",
-      "more",
-      "muchmore"
-    ],
-    "portals": [
-      "casual",
-      "",
-      "hard",
-      "veryhard"
-    ]
+    "combat": {
+      "easy":     15,
+      "normal":   20,
+      "hard":     30,
+      "veryhard": 15
+    },
+    "deathpenalty": {
+      "casual":   10,
+      "veryeasy": 15,
+      "easy":     20,
+      "normal":   30,
+      "hard":     15
+    },
+    "resources": {
+      "muchless": 10,
+      "less":     20,
+      "normal":   40,
+      "more":     20,
+      "muchmore": 10
+    },
+    "raids": {
+      "none":     5,
+      "muchless": 10,
+      "normal":   30,
+      "more":     20,
+      "muchmore": 10
+    },
+    "portals": {
+      "casual":   5,
+      "normal":   30,
+      "hard":     15,
+      "veryhard": 5
+    }
   },
-  "setkeys": [
-    "nomap",
-    "passivemobs"
-  ]
+
+  "balance": {
+    "difficulty_range": [-1, 1],
+    "max_attempts": 100,
+    "scores": {
+      "combat":       { "easy": -2, "normal": 0, "hard": 0.5, "veryhard": 2 },
+      "deathpenalty": { "casual": -3, "veryeasy": -2, "easy": -0.5, "normal": 0, "hard": 2, "hardcore": 3 },
+      "resources":    { "muchmore": -2, "more": -1, "normal": 0, "less": 0.5, "muchless": 1 },
+      "raids":        { "none": -2, "muchless": -1, "normal": 0, "more": 0.5, "muchmore": 1.5 },
+      "portals":      { "casual": -2, "normal": 0, "hard": 0.5, "veryhard": 2 }
+    }
+  },
+
+  "setkeys": []
 }

@@ -38,12 +38,30 @@ if [ ! -d "$SERVER_DIR" ]; then
     exit 1
 fi
 
+echo "=== Валидация modifiers.json ==="
+if ! python3 -c "
+import json, sys
+sys.path.insert(0, '$REPO_DIR')
+from modifier_picker import validate_config
+with open('$REPO_DIR/modifiers.json') as f:
+    problems = validate_config(json.load(f))
+if problems:
+    for k, v in problems.items():
+        print(f'  [{k}] {v}', file=sys.stderr)
+    sys.exit(1)
+"; then
+    echo "ОШИБКА: modifiers.json невалиден, деплой прерван" >&2
+    exit 1
+fi
+echo "OK"
+
 echo "=== Деплой в $SERVER_DIR ==="
 
 install -o "$STEAM_USER" -g "$STEAM_GROUP" -m 644 "$REPO_DIR/modifiers.json"              "$SERVER_DIR/modifiers.json"
 install -o "$STEAM_USER" -g "$STEAM_GROUP" -m 644 "$REPO_DIR/modifier_descriptions.json"  "$SERVER_DIR/modifier_descriptions.json"
 install -o "$STEAM_USER" -g "$STEAM_GROUP" -m 755 "$REPO_DIR/start_valheim.sh"            "$SERVER_DIR/start_valheim.sh"
 install -o "$STEAM_USER" -g "$STEAM_GROUP" -m 755 "$REPO_DIR/send_tg.py"                  "$SERVER_DIR/send_tg.py"
+install -o "$STEAM_USER" -g "$STEAM_GROUP" -m 755 "$REPO_DIR/modifier_picker.py"          "$SERVER_DIR/modifier_picker.py"
 
 if [ ! -f "$SERVER_DIR/tg.env" ]; then
     install -o "$STEAM_USER" -g "$STEAM_GROUP" -m 600 "$REPO_DIR/tg.env.example" "$SERVER_DIR/tg.env"

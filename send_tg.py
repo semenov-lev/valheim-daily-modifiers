@@ -58,15 +58,15 @@ with open(DESC, encoding="utf-8") as f:
 def describe(modifier: str, value) -> str:
     """Возвращает строку для Telegram для одного модификатора.
 
-    Если value is None (модификатор не передан), используется запись 'normal'
-    из справочника — это позволяет описать стандартные игровые значения.
+    Новый формат last_modifiers.json пишет 'normal' явным значением (а не
+    null), поэтому обычно value == 'normal'. Значение None возможно только
+    для файла от старой версии — трактуем его как normal.
     """
     lookup_key = "normal" if value is None else value
     entry = desc.get(modifier, {}).get(lookup_key)
 
     if entry is None:
-        raw = value if value is not None else "normal"
-        return f"{raw} (описание не найдено)"
+        return f"{lookup_key} (описание не найдено)"
 
     return f"{entry['label']} — {entry['description']}"
 
