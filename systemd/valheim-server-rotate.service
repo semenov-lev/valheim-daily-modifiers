@@ -5,6 +5,10 @@ After=valheim-server.service network-online.target
 [Service]
 Type=oneshot
 User=root
+# Секреты Telegram/OpenAI для ExecStartPost (send_tg.py читает их из
+# окружения). Без этого send_tg.py падает с «TG_BOT_TOKEN или TG_CHAT_ID
+# не заданы».
+EnvironmentFile=/home/steam/Valheim-Server/tg.env
 # Останавливаем сервис (SIGINT → сохранение мира), ставим маркер ротации,
 # затем запускаем. start_valheim.sh увидит маркер, сгенерирует новую
 # комбинацию и запишет её в last_modifiers.json. Это единственный путь,
