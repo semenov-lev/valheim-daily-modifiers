@@ -228,13 +228,12 @@ if setkeys:
             lines.append(f"• {key}")
 
 lines.append("")
-lines.append("<i>Сервер запущен, мир сохранён.</i>")
 
 # ИИ-анализ (если настроен) — отдельным абзацем внизу.
 analysis = generate_analysis(modifiers_block)
 if analysis:
     lines.append("")
-    lines.append(f"🧠 <i>ИИ-комментарий:</i> {analysis}")
+    lines.append(analysis)
 
 text = "\n".join(lines)
 
