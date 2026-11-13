@@ -3,9 +3,11 @@
 Набор скриптов и systemd-юнитов для выделенного сервера Valheim (Ubuntu 24.04):
 
 - 🎲 **Ежедневная случайная ротация world modifiers** — комбинация `combat`,
-  `deathpenalty`, `resources`, `raids`, `portals` выбирается заново при каждом
-  перезапуске с учётом **весов** и **баланса сложности** (см.
-  [`modifier_picker.py`](#как-работает-выбор-модификаторов)).
+  `deathpenalty`, `resources`, `raids`, `portals` выбирается заново **только
+  при срабатывании таймера ротации** с учётом **весов** и **баланса сложности**
+  (см. [`modifier_picker.py`](#как-работает-выбор-модификаторов)). Внешние
+  рестарты (обновления системы, ребут, падение) применяют **ту же** комбинацию —
+  см. [«Механизм ротации»](#механизм-ротации-когда-меняется-сложность).
 - ⚖️ **Сбалансированность** — суммарный difficulty score комбинации держится в
   заданном диапазоне (`difficulty_range`), поэтому «лёгкие» и «сложные» дни
   перемежаются, а не выпадают подряд.
@@ -60,12 +62,12 @@ sudo systemctl enable --now valheim-server-rotate.timer
 | `modifiers.json` | Пул значений с **весами**, блок `balance` (difficulty scores, диапазон), фиксированный набор `setkeys`, время ротации |
 | `modifier_descriptions.json` | Справочник «код → название и объяснение по-русски» для Telegram |
 | `modifier_picker.py` | Взвешенный выбор + проверка difficulty score; режим `--stats` и функция `validate_config` |
-| `start_valheim.sh` | Вызывает `modifier_picker.py`, пишет `last_modifiers.json`, запускает сервер через `exec` |
+| `start_valheim.sh` | Применяет модификаторы и запускает сервер через `exec`. Новую комбинацию генерирует **только** при маркере ротации; иначе применяет сохранённую `last_modifiers.json` |
 | `send_tg.py` | Читает `last_modifiers.json` + `modifier_descriptions.json`, отправляет сообщение и закрепляет его |
 | `apply-schedule.sh` | Генерирует `valheim-server-rotate.timer` из шаблона по `restart_time` из JSON |
 | `deploy.sh` | Валидирует конфиг, копирует файлы в `/home/steam/Valheim-Server/`, ставит юниты, вызывает `apply-schedule.sh` |
-| `systemd/valheim-server.service` | Основной сервис: SteamCMD update → обёртка → `ExecStartPost` с уведомлением |
-| `systemd/valheim-server-rotate.service` | Разовый `systemctl restart` основного сервиса |
+| `systemd/valheim-server.service` | Основной сервис: SteamCMD update → обёртка → сервер. Без `ExecStartPost` (не шлёт TG, не меняет сложность при обычном старте) |
+| `systemd/valheim-server-rotate.service` | Ротация: `stop` → маркер `/run/valheim-rotate.flag` → `start`, затем `ExecStartPost` с уведомлением |
 | `systemd/valheim-server-rotate.timer.template` | Шаблон таймера с плейсхолдером `__RESTART_TIME__` |
 
 Runtime-файлы, которые **не коммитятся** и создаются на сервере:
@@ -112,11 +114,16 @@ Runtime-файлы, которые **не коммитятся** и создаю
 3. **`pick_balanced(...)`** — до `max_attempts` раз собирает комбинацию и
    возвращает первую, чей score попал в `[lo, hi]`; иначе fallback на `normal`.
 
-При запуске `start_valheim.sh` вызывает пикер, получает JSON-комбинацию,
+При ротации `start_valheim.sh` вызывает пикер, получает JSON-комбинацию,
 атомарно пишет её в `last_modifiers.json` (с `timestamp`, `_difficulty_score` и
 `_attempts`), собирает аргументы `-modifier <имя> <значение>` для всех
 значений, **кроме** `normal`, добавляет `-setkey` для каждого элемента
 `setkeys[]` и `exec`-ом запускает `start_server_configured.sh`.
+
+Пикер вызывается **только при наличии маркера `/run/valheim-rotate.flag`**
+(создаёт `valheim-server-rotate.service`). При любом другом старте применяется
+уже сохранённая `last_modifiers.json` — см.
+[«Механизм ротации»](#механизм-ротации-когда-меняется-сложность).
 
 ```json
 {
@@ -276,6 +283,48 @@ TimeoutStopSec=120
 `KillSignal=SIGINT` `systemctl restart` завершит процесс аварийно, и вы
 потеряете весь прогресс с последнего автосохранения.
 
+## Механизм ротации: когда меняется сложность
+
+Сложность меняется **только** в результате работы
+`valheim-server-rotate.service`. Это гарантируется маркером ротации:
+
+1. `valheim-server-rotate.service` (по таймеру или вручную) выполняет
+   `systemctl stop valheim-server` — сервер корректно сохраняет мир;
+2. создаёт маркер-файл `/run/valheim-rotate.flag`;
+3. `systemctl start valheim-server`;
+4. `start_valheim.sh` видит маркер → вызывает `modifier_picker.py`, генерирует
+   **новую** комбинацию, пишет её в `last_modifiers.json` и удаляет маркер;
+5. `ExecStartPost` в `valheim-server-rotate.service` отправляет сообщение в
+   Telegram.
+
+Если маркера нет (обычный старт), `start_valheim.sh` **не** запускает пикер, а
+читает уже сохранённую `last_modifiers.json` и применяет ту же комбинацию. Это
+касается:
+
+- рестарта от `needrestart` после обновления `libc6` и других системных
+  библиотек (как при `unattended-upgrades`);
+- перезагрузки хоста (boot) — маркер в `/run` (tmpfs) при этом исчезает,
+  поэтому ребут не считается ротацией;
+- ручного `systemctl restart valheim-server`;
+- автоматического `Restart=on-abnormal` после падения процесса.
+
+Во всех этих случаях сложность **не меняется**, а Telegram-сообщение **не**
+отправляется. Единственный «особый» случай — самый первый старт, когда
+`last_modifiers.json` ещё не существует: тогда комбинация генерируется один раз,
+чтобы серверу было что применить.
+
+Маркер живёт в `/run` (tmpfs) — он автоматически исчезает при перезагрузке, и
+«зависший» маркер после неудачной ротации не переживёт ребут.
+
+### Как запустить ротацию вручную
+
+```bash
+sudo systemctl start valheim-server-rotate.service   # = стоп → маркер → старт → TG
+```
+
+Не используйте для смены сложности `systemctl restart valheim-server` — это лишь
+перезапустит сервер с **текущей** комбинацией.
+
 ## Telegram через SOCKS5-прокси
 
 Скрипт `send_tg.py` использует библиотеку `requests`, которая поддерживает
@@ -355,18 +404,19 @@ unset P T
 
 ### Когда отправляется сообщение
 
-Уведомление вызывается из `ExecStartPost=` основного сервиса, то есть **после
-каждого запуска**, включая:
+Уведомление вызывается из `ExecStartPost=` **`valheim-server-rotate.service`**,
+то есть **только при реальной ротации** — когда сработал таймер (05:00 или
+catch-up после пропуска) или вы вручную запустили ротацию.
 
-- ежедневный рестарт по таймеру (05:00 или catch-up после пропуска);
-- ручной `systemctl restart valheim-server`;
-- перезагрузку сервера (boot).
+Обычные рестарты `valheim-server.service` (needrestart после обновления `libc`,
+автообновления, ребут хоста, `Restart=on-abnormal` при падении) **не** шлют
+сообщение — у основного сервиса `ExecStartPost` больше нет. Сложность при таких
+стартах тоже не меняется (применяется сохранённая `last_modifiers.json`).
 
 Префикс `-` в `ExecStartPost=` означает, что провал `send_tg.py` (нет `tg.env`,
 прокси недоступен, `last_modifiers.json` отсутствует) **не** переведёт юнит в
-состояние `failed` и **не** остановит работающий сервер. Ошибки видны в
-`journalctl -u valheim-server.service` — они не влияют на жизненный цикл
-сервиса, но полезны для диагностики.
+состояние `failed`. Ошибки видны в `journalctl -u valheim-server-rotate.service`
+— они не влияют на жизненный цикл сервиса, но полезны для диагностики.
 
 ## Бэкапы
 
@@ -426,6 +476,14 @@ sudo systemctl restart valheim-server.service
 и `last_modifiers.json`. Юнит `valheim-server.service` не перезапускается
 автоматически — это осознанно: `restart` делается руками, чтобы контролировать
 момент перезапуска.
+
+`sudo systemctl restart valheim-server` применяет **текущую** комбинацию из
+`last_modifiers.json` и **не** меняет сложность. Чтобы сменить модификаторы
+сразу, запустите не `restart`, а ротацию:
+
+```bash
+sudo systemctl start valheim-server-rotate.service
+```
 
 ## Структура репозитория
 

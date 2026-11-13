@@ -89,4 +89,4 @@ echo
 echo "=== Готово ==="
 echo "Проверить юнит:          systemctl cat valheim-server.service"
 echo "Активировать таймер:     systemctl enable --now valheim-server-rotate.timer"
-echo "Применить модификаторы:  systemctl restart valheim-server.service"
+echo "Сменить модификаторы:    systemctl start valheim-server-rotate.service"

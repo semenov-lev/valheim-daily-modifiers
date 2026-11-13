@@ -5,6 +5,7 @@ SERVER_DIR="/home/steam/Valheim-Server"
 JSON="$SERVER_DIR/modifiers.json"
 LAST="$SERVER_DIR/last_modifiers.json"
 PICKER="$SERVER_DIR/modifier_picker.py"
+ROTATE_FLAG="/run/valheim-rotate.flag"
 
 command -v jq &>/dev/null || { echo "jq не установлен" >&2; exit 1; }
 [ -f "$PICKER" ] || { echo "ОШИБКА: $PICKER не найден" >&2; exit 1; }
@@ -14,13 +15,31 @@ command -v jq &>/dev/null || { echo "jq не установлен" >&2; exit 1; 
     exit 1
 }
 
-# Python выбирает комбинацию (JSON в stdout)
-COMBO_JSON=$(python3 "$PICKER" "$JSON")
+# Решаем, генерировать новую комбинацию или применить сохранённую.
+# Ротация (новый выбор) происходит ТОЛЬКО когда rotate.service создал
+# маркер /run/valheim-rotate.flag. Любые другие старты (needrestart после
+# обновления libc, ребут хоста, ручной restart, падение) применяют уже
+# сохранённую комбинацию из last_modifiers.json — сложность не меняется.
+ROTATE=0
+if [ -f "$ROTATE_FLAG" ]; then
+    ROTATE=1
+    rm -f "$ROTATE_FLAG"
+fi
 
-# Атомарно пишем last_modifiers.json + timestamp
-TMP=$(mktemp)
-echo "$COMBO_JSON" | jq --arg ts "$(date -Iseconds)" '. + {timestamp: $ts}' > "$TMP"
-mv "$TMP" "$LAST"
+if [ "$ROTATE" -eq 1 ] || [ ! -f "$LAST" ]; then
+    # Новая комбинация: взвешенный выбор + балансировка difficulty score
+    COMBO_JSON=$(python3 "$PICKER" "$JSON")
+
+    # Атомарно пишем last_modifiers.json + timestamp
+    TMP=$(mktemp)
+    echo "$COMBO_JSON" | jq --arg ts "$(date -Iseconds)" '. + {timestamp: $ts}' > "$TMP"
+    mv "$TMP" "$LAST"
+    echo "Режим: РОТАЦИЯ (новая комбинация модификаторов)"
+else
+    # Применяем уже сохранённую комбинацию (без изменения сложности)
+    COMBO_JSON=$(cat "$LAST")
+    echo "Режим: ПРИМЕНЕНИЕ сохранённой комбинации (без ротации)"
+fi
 
 # Собираем -modifier для всего, кроме normal
 ARGS=()

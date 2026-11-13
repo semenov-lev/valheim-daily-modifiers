@@ -13,12 +13,16 @@ EnvironmentFile=/home/steam/Valheim-Server/tg.env
 ExecStartPre=/usr/games/steamcmd +force_install_dir '/home/steam/Valheim-Server' +login anonymous +app_update 896660 validate +quit
 TimeoutStartSec=900
 
-# Обёртка: случайные модификаторы + exec сервера
+# Обёртка: применяет комбинацию и exec сервера.
+# Новая комбинация генерируется ТОЛЬКО при наличии маркера ротации
+# (/run/valheim-rotate.flag, создаётся rotate.service). При любом другом
+# старте (needrestart, ребут, ручной restart, падение) применяется уже
+# сохранённая last_modifiers.json — сложность не меняется.
 ExecStart=/home/steam/Valheim-Server/start_valheim.sh
 
-# Уведомление после каждого успешного старта (включая restart от rotate-сервиса)
-ExecStartPost=-/bin/bash -c 'sleep 5 && /usr/bin/python3 /home/steam/Valheim-Server/send_tg.py'
-
+# Уведомление в Telegram отправляет rotate.service (ExecStartPost) — только
+# при реальной ротации. Здесь ExecStartPost убран, чтобы обновления libc и
+# прочие внешние рестарты не слали лишние сообщения и не меняли сложность.
 # КРИТИЧЕСКИ ВАЖНО: SIGINT → сохранение мира при остановке
 KillSignal=SIGINT
 TimeoutStopSec=120

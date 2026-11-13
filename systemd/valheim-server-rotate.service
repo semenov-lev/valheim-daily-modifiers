@@ -5,7 +5,20 @@ After=valheim-server.service network-online.target
 [Service]
 Type=oneshot
 User=root
+# Останавливаем сервис (SIGINT → сохранение мира), ставим маркер ротации,
+# затем запускаем. start_valheim.sh увидит маркер, сгенерирует новую
+# комбинацию и запишет её в last_modifiers.json. Это единственный путь,
+# которым меняется сложность.
+# Маркер создаётся с владельцем steam, чтобы start_valheim.sh (User=steam)
+# мог его прочитать и удалить. install /dev/null - безопасный способ создать
+# пустой файл с нужными владельцем и правами.
 ExecStart=/bin/bash -c '\
-    systemctl restart valheim-server.service && \
+    systemctl stop valheim-server.service && \
+    install -o steam -g steam -m 644 /dev/null /run/valheim-rotate.flag && \
+    systemctl start valheim-server.service && \
     sleep 5 && \
     systemctl is-active --quiet valheim-server.service'
+
+# Уведомление в Telegram — только при реальной ротации. Префикс '-' делает
+# провал send_tg.py (нет tg.env/прокси/last_modifiers.json) нефатальным.
+ExecStartPost=-/bin/bash -c 'sleep 5 && /usr/bin/python3 /home/steam/Valheim-Server/send_tg.py'
