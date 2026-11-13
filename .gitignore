@@ -218,3 +218,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Valheim runtime state (создаются на сервере, не коммитятся)
+last_modifiers.json
+telegram_state.json
+tg.env
