@@ -71,7 +71,7 @@ sudo systemctl enable --now valheim-server-rotate.timer
 | `apply-schedule.sh` | Генерирует `valheim-server-rotate.timer` из шаблона по `restart_time` из JSON |
 | `deploy.sh` | Валидирует конфиг, копирует файлы в `/home/steam/Valheim-Server/`, ставит юниты, вызывает `apply-schedule.sh` |
 | `systemd/valheim-server.service` | Основной сервис: SteamCMD update → обёртка → сервер. Без `ExecStartPost` (не шлёт TG, не меняет сложность при обычном старте) |
-| `systemd/valheim-server-rotate.service` | Ротация: `stop` → маркер `/run/valheim-rotate.flag` → `start`, затем `ExecStartPost` с уведомлением |
+| `systemd/valheim-server-rotate.service` | Ротация: `stop` → маркер `/run/valheim/rotate.flag` → `start`, затем `ExecStartPost` с уведомлением |
 | `systemd/valheim-server-rotate.timer.template` | Шаблон таймера с плейсхолдером `__RESTART_TIME__` |
 
 Runtime-файлы, которые **не коммитятся** и создаются на сервере:
@@ -125,7 +125,7 @@ Runtime-файлы, которые **не коммитятся** и создаю
 значений, **кроме** `normal`, добавляет `-setkey` для каждого элемента
 `setkeys[]` и `exec`-ом запускает `start_server_configured.sh`.
 
-Пикер вызывается **только при наличии маркера `/run/valheim-rotate.flag`**
+Пикер вызывается **только при наличии маркера `/run/valheim/rotate.flag`**
 (создаёт `valheim-server-rotate.service`). При любом другом старте применяется
 уже сохранённая `last_modifiers.json` — см.
 [«Механизм ротации»](#механизм-ротации-когда-меняется-сложность).
@@ -295,7 +295,8 @@ TimeoutStopSec=120
 
 1. `valheim-server-rotate.service` (по таймеру или вручную) выполняет
    `systemctl stop valheim-server` — сервер корректно сохраняет мир;
-2. создаёт маркер-файл `/run/valheim-rotate.flag`;
+2. создаёт маркер-файл `/run/valheim/rotate.flag` (каталог `/run/valheim`
+   принадлежит `steam`);
 3. `systemctl start valheim-server`;
 4. `start_valheim.sh` видит маркер → вызывает `modifier_picker.py`, генерирует
    **новую** комбинацию, пишет её в `last_modifiers.json` и удаляет маркер;
@@ -318,8 +319,15 @@ TimeoutStopSec=120
 `last_modifiers.json` ещё не существует: тогда комбинация генерируется один раз,
 чтобы серверу было что применить.
 
-Маркер живёт в `/run` (tmpfs) — он автоматически исчезает при перезагрузке, и
-«зависший» маркер после неудачной ротации не переживёт ребут.
+Маркер живёт в `/run/valheim` (tmpfs) — он автоматически исчезает при
+перезагрузке, и «зависший» маркер после неудачной ротации не переживёт ребут.
+
+> **Почему `/run/valheim`, а не `/run` напрямую.** Удаление файла в Linux
+> определяется правами на **каталог**, а не на сам файл. `/run` принадлежит
+> `root`, поэтому процесс `start_valheim.sh` (работает от `steam`) не смог бы
+> удалить оттуда маркер — даже если бы файл принадлежал `steam`. `rotate.service`
+> создаёт каталог `/run/valheim` с владельцем `steam`, и тогда `start_valheim.sh`
+> может удалять маркер.
 
 ### Как запустить ротацию вручную
 

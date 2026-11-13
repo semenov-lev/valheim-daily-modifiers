@@ -5,7 +5,7 @@ SERVER_DIR="/home/steam/Valheim-Server"
 JSON="$SERVER_DIR/modifiers.json"
 LAST="$SERVER_DIR/last_modifiers.json"
 PICKER="$SERVER_DIR/modifier_picker.py"
-ROTATE_FLAG="/run/valheim-rotate.flag"
+ROTATE_FLAG="/run/valheim/rotate.flag"
 
 command -v jq &>/dev/null || { echo "jq не установлен" >&2; exit 1; }
 [ -f "$PICKER" ] || { echo "ОШИБКА: $PICKER не найден" >&2; exit 1; }
@@ -17,9 +17,12 @@ command -v jq &>/dev/null || { echo "jq не установлен" >&2; exit 1; 
 
 # Решаем, генерировать новую комбинацию или применить сохранённую.
 # Ротация (новый выбор) происходит ТОЛЬКО когда rotate.service создал
-# маркер /run/valheim-rotate.flag. Любые другие старты (needrestart после
+# маркер /run/valheim/rotate.flag. Любые другие старты (needrestart после
 # обновления libc, ребут хоста, ручной restart, падение) применяют уже
 # сохранённую комбинацию из last_modifiers.json — сложность не меняется.
+# Маркер лежит в /run/valheim (каталог с владельцем steam), а не прямо в
+# /run: удаление файла определяется правами на КАТАЛОГ, а /run принадлежит
+# root — скрипт (User=steam) не смог бы удалить оттуда маркер.
 ROTATE=0
 if [ -f "$ROTATE_FLAG" ]; then
     ROTATE=1

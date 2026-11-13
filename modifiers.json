@@ -38,7 +38,7 @@
   },
 
   "balance": {
-    "difficulty_range": [-1, 1],
+    "difficulty_range": [-0.5, 1],
     "max_attempts": 100,
     "scores": {
       "combat":       { "easy": -2, "normal": 0, "hard": 0.5, "veryhard": 2 },

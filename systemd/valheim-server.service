@@ -15,7 +15,7 @@ TimeoutStartSec=900
 
 # Обёртка: применяет комбинацию и exec сервера.
 # Новая комбинация генерируется ТОЛЬКО при наличии маркера ротации
-# (/run/valheim-rotate.flag, создаётся rotate.service). При любом другом
+# (/run/valheim/rotate.flag, создаётся rotate.service). При любом другом
 # старте (needrestart, ребут, ручной restart, падение) применяется уже
 # сохранённая last_modifiers.json — сложность не меняется.
 ExecStart=/home/steam/Valheim-Server/start_valheim.sh

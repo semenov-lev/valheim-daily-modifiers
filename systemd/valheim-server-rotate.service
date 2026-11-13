@@ -9,12 +9,15 @@ User=root
 # затем запускаем. start_valheim.sh увидит маркер, сгенерирует новую
 # комбинацию и запишет её в last_modifiers.json. Это единственный путь,
 # которым меняется сложность.
-# Маркер создаётся с владельцем steam, чтобы start_valheim.sh (User=steam)
-# мог его прочитать и удалить. install /dev/null - безопасный способ создать
-# пустой файл с нужными владельцем и правами.
+# Маркер кладём в каталог /run/valheim, которым владеет steam: удаление
+# файла определяется правами на КАТАЛОГ, а не на сам файл. Прямо в /run
+# (root:root) start_valheim.sh от steam удалить маркер не смог бы.
+# install -d создаёт каталог с владельцем steam (если его ещё нет);
+# install /dev/null — создаёт пустой файл-маркер с нужными правами.
 ExecStart=/bin/bash -c '\
     systemctl stop valheim-server.service && \
-    install -o steam -g steam -m 644 /dev/null /run/valheim-rotate.flag && \
+    install -d -o steam -g steam -m 0755 /run/valheim && \
+    install -o steam -g steam -m 644 /dev/null /run/valheim/rotate.flag && \
     systemctl start valheim-server.service && \
     sleep 5 && \
     systemctl is-active --quiet valheim-server.service'
